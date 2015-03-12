@@ -4,7 +4,7 @@ import java.io.File
 
 import com.codacy.api.CodacyAPIClient
 import com.codacy.io.FileUtils
-import com.codacy.parsers.CoberturaParser
+import com.codacy.parsers.CoverageParser
 import com.codacy.vcs.GitClient
 import play.api.libs.json.Json
 import sbt.Keys._
@@ -18,25 +18,21 @@ object CodacyCoveragePlugin extends AutoPlugin {
     val codacyCoverage = taskKey[Unit]("Upload coverage reports to Codacy.")
     val codacyProjectToken = settingKey[Option[String]]("Your project token.")
     val codacyProjectTokenFile = settingKey[Option[String]]("Path for file containing your project token.")
-    val coberturaFile = settingKey[File]("Path for project Cobertura file.")
     val codacyApiBaseUrl = settingKey[Option[String]]("The base URL for the Codacy API.")
 
     lazy val baseSettings: Seq[Def.Setting[_]] = Seq(
       codacyCoverage := {
-        codacyCoverageCommand(state.value, baseDirectory.value, coberturaFile.value,
+        codacyCoverageCommand(state.value, baseDirectory.value, crossTarget.value / _,
           crossTarget.value / "coverage-report" / "codacy-coverage.json",
           codacyProjectToken.value, codacyProjectTokenFile.value, codacyApiBaseUrl.value)
       },
       codacyProjectToken := None,
       codacyProjectTokenFile := None,
-      codacyApiBaseUrl := None,
-      coberturaFile := crossTarget.value / ("coverage-report" + File.separator + "cobertura.xml")
+      codacyApiBaseUrl := None
     )
   }
 
   import com.codacy.CodacyCoveragePlugin.autoImport._
-
-  //override def requires = ScoverageSbtPlugin
 
   override def trigger = allRequirements
 
@@ -44,9 +40,14 @@ object CodacyCoveragePlugin extends AutoPlugin {
 
   private val publicApiBaseUrl = "https://www.codacy.com"
 
-  private def codacyCoverageCommand(state: State, rootProjectDir: File, coberturaFile: File, codacyCoverageFile: File,
+  private def codacyCoverageCommand(state: State, rootProjectDir: File, targetFolder: (String) => File, codacyCoverageFile: File,
                                     codacyToken: Option[String], codacyTokenFile: Option[String], codacyApiBaseUrl: Option[String]): Unit = {
     implicit val logger: Logger = state.log
+
+    val reportFiles = Seq(
+      targetFolder("coverage-report" + File.separator + "cobertura.xml"),
+      targetFolder("jacoco" + File.separator + "jacoco.xml")
+    )
 
     getProjectToken(codacyToken, codacyTokenFile).fold[State] {
       logger.error("Project token not defined.")
@@ -63,29 +64,24 @@ object CodacyCoveragePlugin extends AutoPlugin {
 
             logger.info(s"Preparing coverage data for commit ${commitUuid.take(7)}...")
 
-            FileUtils.get(coberturaFile).fold[State] {
+            CoverageParser.generateReport(reportFiles, rootProjectDir).fold[State] {
               state.exit(ok = false)
             } {
-              coberturaFile =>
-
-                val reader = new CoberturaParser(coberturaFile, rootProjectDir)
-                val report = reader.generateReport()
+              report =>
                 FileUtils.write(codacyCoverageFile, Json.toJson(report).toString())
 
                 logger.info(s"Uploading coverage data...")
 
-                new CodacyAPIClient().postCoverageFile(projectToken,
-                                                       commitUuid,
-                                                       codacyCoverageFile,
-                                                       getApiBaseUrl(codacyApiBaseUrl)).fold[State](
-                  error => {
-                    logger.error(s"Failed to upload data. Reason: $error")
-                    state.exit(ok = false)
-                  },
-                  response => {
-                    logger.success(s"Coverage data uploaded. $response")
-                    state
-                  })
+                new CodacyAPIClient().postCoverageFile(projectToken, commitUuid, codacyCoverageFile,
+                  getApiBaseUrl(codacyApiBaseUrl)).fold[State](
+                    error => {
+                      logger.error(s"Failed to upload data. Reason: $error")
+                      state.exit(ok = false)
+                    },
+                    response => {
+                      logger.success(s"Coverage data uploaded. $response")
+                      state
+                    })
             }
         }
     }

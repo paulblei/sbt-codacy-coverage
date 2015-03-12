@@ -2,7 +2,7 @@ import Dependencies._
 
 name := "sbt-codacy-coverage"
 
-version := "1.0.3"
+version := "1.1.0"
 
 scalaVersion := "2.10.4"
 
@@ -12,8 +12,8 @@ sbtPlugin := true
 
 resolvers ++= Seq(
   DefaultMavenRepository,
-  "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/",
-  "Sonatype snapshots" at "http://oss.sonatype.org/content/repositories/snapshots/",
+  "Typesafe Repository" at "https://repo.typesafe.com/typesafe/releases/",
+  "Sonatype snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/",
   Classpaths.typesafeReleases,
   Classpaths.sbtPluginReleases
 )

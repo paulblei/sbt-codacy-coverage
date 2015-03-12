@@ -7,13 +7,6 @@ import scala.util.Try
 
 object FileUtils {
 
-  def get(file: File): Option[File] = {
-    file match {
-      case f if f.exists() => Some(f)
-      case f => None
-    }
-  }
-
   def read(filePath: String): Option[String] = {
     Try {
       val source = Source.fromFile(filePath)
@@ -23,9 +16,13 @@ object FileUtils {
     }.toOption
   }
 
-  def write(filePath: File, content: String): Unit = {
+  def write(file: File, content: String): Unit = {
     Try {
-      val printer = new PrintWriter(filePath)
+      if (!file.exists()) {
+        file.getParentFile.mkdirs()
+      }
+
+      val printer = new PrintWriter(file)
       printer.println(content)
       printer.close()
     }.toOption

@@ -4,35 +4,21 @@ import java.io.File
 
 import com.codacy.api.{CodacyCoverageFileReport, CodacyCoverageReport}
 
-import scala.xml.factory.XMLLoader
-import scala.xml.{SAXParser, Elem, Node}
-
-object XML extends XMLLoader[Elem] {
-  override def parser: SAXParser = {
-    val f = javax.xml.parsers.SAXParserFactory.newInstance()
-    f.setNamespaceAware(false)
-    f.setValidating(false)
-    f.setFeature("http://xml.org/sax/features/namespaces", false)
-    f.setFeature("http://xml.org/sax/features/validation", false)
-    f.setFeature("http://apache.org/xml/features/nonvalidating/load-dtd-grammar", false)
-    f.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
-    f.newSAXParser()
-  }
-}
-
-class CoberturaParser(coberturaFile: File, rootProject: File) {
-
-  val elem = XML.loadFile(coberturaFile)
+class CoberturaParser(val coverageReport: File, val rootProject: File) extends CoverageParser {
 
   val rootProjectDir = rootProject.getAbsolutePath + File.separator
 
-  def generateReport(): CodacyCoverageReport = {
-    val total = (elem \\ "coverage" \ "@line-rate").headOption.map {
+  override def isValidReport: Boolean = {
+    (xml \\ "coverage").length > 0
+  }
+
+  override def generateReport(): CodacyCoverageReport = {
+    val total = (xml \\ "coverage" \ "@line-rate").headOption.map {
       total =>
         (total.text.toFloat * 100).toInt
     }.getOrElse(0)
 
-    val files = (elem \\ "class" \\ "@filename").map(_.text).toSet
+    val files = (xml \\ "class" \\ "@filename").map(_.text).toSet
 
     val filesCoverage = files.map {
       file =>
@@ -43,8 +29,8 @@ class CoberturaParser(coberturaFile: File, rootProject: File) {
   }
 
   private def lineCoverage(sourceFilename: String): CodacyCoverageFileReport = {
-    val file = (elem \\ "class").filter {
-      n: Node =>
+    val file = (xml \\ "class").filter {
+      n =>
         (n \\ "@filename").text == sourceFilename
     }
 
